@@ -3,10 +3,7 @@ import numpy as np
 import cupy as cp
 from numba import cuda, prange
 from numba.cuda import random as cuda_random
-from numba import jit, njit, vectorize
-from numba.core.errors import NumbaPerformanceWarning
-import warnings
-
+from numba import jit
 
 @jit
 def DDM_cpu_sim(stimulus, starting_point, drift_gain, drift_variability, drift_offset, decision_bound, nondecision_time): 
@@ -38,9 +35,6 @@ def DDM_cpu_sim(stimulus, starting_point, drift_gain, drift_variability, drift_o
         2022-03 VT wrote it
         
     """
-    
-    # # Input validation
-    # import warnings    
     
     if stimulus.ndim < 2 or stimulus.ndim > 3:        
         raise ValueError('Stimulus must be 2 or 3 dimensional array. \
@@ -129,7 +123,7 @@ def DDM_kernel(stimulus, starting_point, drift_gain, drift_variability, drift_of
                 break  
 
 
-def DDM_gpu_sim(stimulus, starting_point, drift_gain, drift_variability, drift_offset, decision_bound, nondecision_time, urgency_signal, batch_size=None, seed=None):
+def DDM_gpu_sim(stimulus, starting_point, drift_gain, drift_variability, drift_offset, decision_bound, nondecision_time, urgency_signal, blockdim=128, batch_size=None, seed=None):
     """
     Batch simulation for individual_accumulator kernel. If the stimulus size is too big, GPU memory might overload hence splitting the data in multiple batches
     
@@ -173,14 +167,14 @@ def DDM_gpu_sim(stimulus, starting_point, drift_gain, drift_variability, drift_o
                 
     if decision_bound.shape[0] != stimulus.shape[2]:        
         raise ValueError('Must provide decision bound as array with length eqaul to num_samples')
-        
+
     # If batch_size not provided, simulate whole data
     if batch_size is None:
         batch_size = stimulus.shape[0]    
-        
+
+
     # Setting up parellel grid
-    multiplier = 8
-    blockdim = int(multiplier*32)
+    blockdim = 128
     griddim = (batch_size // blockdim) + 1
 
     # Setting random seed if not provided.
@@ -248,4 +242,5 @@ def initialize_DDM_kernel(num_trials=3, num_choices=2, num_samples=1000):
     cuda.synchronize()
     DDM_kernel[griddim, blockdim](stimulus_cp, starting_point, drift_gain, drift_variability, drift_offset, decision_bound, nondecision_time, urgency_signal, decision, reaction_time, rng_states)
     cuda.synchronize()    
+
 

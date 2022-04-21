@@ -3,9 +3,7 @@ import numpy as np
 import cupy as cp
 from numba import cuda, prange
 from numba.cuda import random as cuda_random
-from numba import jit, njit, vectorize
-from numba.core.errors import NumbaPerformanceWarning
-
+from numba import jit
 
 
 @jit        
@@ -105,7 +103,6 @@ def IAM_cpu_sim(stimulus, starting_point, drift_gain, drift_variability, drift_o
                 break        
             
     return decision, reaction_time
-
 
 
 
@@ -238,7 +235,7 @@ def IAM_kernel(stimulus, starting_point, drift_gain, drift_variability, drift_of
         
 
 
-def IAM_gpu_sim(stimulus, starting_point, drift_gain, drift_variability, drift_offset, decision_bound, nondecision_time, lateral_inhibition, leak, neural_ddm, urgency_signal, batch_size=None, seed=None):
+def IAM_gpu_sim(stimulus, starting_point, drift_gain, drift_variability, drift_offset, decision_bound, nondecision_time, lateral_inhibition, leak, neural_ddm, urgency_signal, blockdim= 128, batch_size=None, seed=None):
     """
     Batch simulation for individual_accumulator kernel. If the stimulus size is too big, GPU memory might overload hence splitting the data in multiple batches
     
@@ -299,8 +296,7 @@ def IAM_gpu_sim(stimulus, starting_point, drift_gain, drift_variability, drift_o
         batch_size = stimulus.shape[0]
 
     # Setting up parellel grid
-    multiplier = 8
-    blockdim = int(multiplier*32)
+    blockdim = 128  
     griddim = (batch_size // blockdim) + 1
 
     # Setting random seed if not provided.

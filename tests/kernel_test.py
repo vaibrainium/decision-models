@@ -1,16 +1,10 @@
 import numpy as np
-from matplotlib import pyplot as plt
-import numba
-import cupy as cp
-from numba import cuda, prange
-from numba.cuda import random as cuda_random
-from numba import jit, njit, vectorize
-from numba.core.errors import NumbaPerformanceWarning
-import warnings
 import unittest
 from src.DDM import *
 from src.IAM import *
 from src.dynamic_parameters import *
+
+
 
 
 class TestModel(unittest.TestCase):
