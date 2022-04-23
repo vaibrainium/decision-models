@@ -1,6 +1,6 @@
 # Decision-Models
 
-Simulation code for decision models.
+Simulation and fitting decision models to behavior data. Drastically fast simulation time with the help of CUDA programming. 
 
 1) Drift-Diffusion Model
 2) Independent Accumulator Model:
