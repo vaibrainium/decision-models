@@ -1,0 +1,8 @@
+FROM python 3.9.13  # Basic python image
+LABEL maintainer='vaibrainium'
+WORKDIR /
+
+# Copy the code into the container and install it
+COPY . /Decision_Models
+RUN pip install .
+
