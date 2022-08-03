@@ -3,5 +3,5 @@ services:
   dev:
     build: .
     volume:
-      - ./:/Decision_Models
-    command: sleep infinity
+      - ./:/src/decision_dodels
+#    command: sleep infinity    # Already implemented in WalkerLab image by running jupyter in the background
