@@ -1,7 +1,15 @@
 version: "3.9"
 services:
+  # Name of service
   dev:
+    # same as docker build .
     build: .
-    volume:
-      - ./:/src/decision_dodels
+    volumes:
+      - ./:/src/decision_models
+    ports:
+      - "${JUPYTER_PORT}:8888"
+    environment:
+      - .env
+    command: "jupyter lab --allow-root --ServerApp.ip='*' --ServerApp.port='8888' --ServerApp.token='${JUPYTER_PASSWORD}' --no-browser"
+
 #    command: sleep infinity    # Already implemented in WalkerLab image by running jupyter in the background
