@@ -1,7 +1,24 @@
-version: "3.9"
 services:
-  dev:
+  # Add as many notebooks as GPUs
+  notebook:
     build: .
-    volume:
-      - ./:/src/decision_dodels
-#    command: sleep infinity    # Already implemented in WalkerLab image by running jupyter in the background
+    env_file: .env
+    ports:
+      - "${JUPYTER_PORT}:8890"
+    environment:
+      - "JUPYTER_PASSWORD=${JUPYTER_PASSWORD}"
+    volumes:
+      - ./:/src/
+      - "${DATAPATH}:/mnt/data"
+
+    command: sleep infinity; nvidia-smi
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities:
+                - gpu
+                - utility # nvidia-smi
+                - compute # CUDA
+                - video # NVDEC/NVENC/NVCUVID. For instance to use a hardware accelerated ffmpeg. Skip it if you don't need it
