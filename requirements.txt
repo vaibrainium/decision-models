@@ -1,1 +1,16 @@
-
+pandas
+numpy
+scipy
+scikit-learn
+numba
+statsmodels
+matplotlib
+seaborn
+bokeh
+pathlib2
+wheel
+torch
+torchvision
+torchaudio
+omegaconf
+pathlib2
