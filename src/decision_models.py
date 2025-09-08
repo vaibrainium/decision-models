@@ -4,7 +4,7 @@ from typing import Callable, Dict, Optional
 import numpy as np
 import torch
 from scipy import stats
-from scipy.optimize import minimize
+from scipy.optimize import differential_evolution, minimize
 
 
 def get_psychometric_data(data, positive_direction="right"):
@@ -76,7 +76,7 @@ class DriftDiffusionSimulator:
         # Calculate drift rates based on stimulus and gain
         drift_rates = self.drift_gain * stimulus + self.drift_offset
         starting_point = self.z * self.a
-        urgency = np.exp(np.arange(n_timepoints) * self.time_constant)
+        urgency = np.arange(n_timepoints) * self.time_constant
         noise = np.random.normal(0, np.sqrt(self.variance * self.dt), size=(n_trials, n_timepoints))
         for trial in range(n_trials):
             evidence[trial, 0] = starting_point
@@ -135,7 +135,7 @@ class DriftDiffusionSimulatorCUDA:
 
         # Drift rates and urgency
         drift_rates = self.drift_gain * stimulus + self.drift_offset
-        urgency = torch.exp(torch.arange(n_timepoints, device=self.device) * self.time_constant)
+        urgency = torch.arange(n_timepoints, device=self.device) * self.time_constant
 
         # Initialize
         evidence[:, 0] = starting_point
@@ -366,18 +366,107 @@ class DecisionModel:
         else:
             self.likelihood_calculator = LikelihoodCalculator(**likelihood_params)
 
-    def fit(self, data, stimulus, optimization_method=None, optimizer_options=None, n_reps=1, seed=42):
+    # def fit(self, data, stimulus, optimization_method=None, optimizer_options=None, n_reps=1, seed=42):
+    #     """
+    #     Fit the model to empirical data using optimization.
+
+    #     Args:
+    #         data (DataFrame): columns 'signed_coherence', 'choice', 'rt', 'prior_block'.
+    #         stimulus (ndarray): shape (n_trials, n_timepoints)
+    #         optimizer_options (dict): options for optimizer.
+    #         n_reps (int): number of replicate simulations per evaluation to reduce noise.
+    #         seed (int): base RNG seed for deterministic likelihoods.
+    #         rt_weight (float): weight for RT likelihood.
+    #         choice_weight (float): weight for choice likelihood.
+
+    #     """
+    #     if optimizer_options is None:
+    #         optimizer_options = {"maxiter": 200, "disp": True}
+
+    #     # --- Parameter setup ---
+    #     self.all_params = {
+    #         # common parameters
+    #         "ndt": (0.1, (0.05, 0.3)),
+    #         "drift_gain": (7.0, (1.0, 20.0)),
+    #         "variance": (1.0, (0.1, 5.0)),
+    #         "a_1": (2.0, (0.5, 5.0)),
+    #         "z_1": (0.5, (0.1, 0.9)),
+    #         "drift_offset_1": (0.0, (-5.0, 5.0)),
+    #         "a_2": (2.0, (0.5, 5.0)),
+    #         "z_2": (0.5, (0.1, 0.9)),
+    #         "drift_offset_2": (0.0, (-5.0, 5.0)),
+    #     }
+    #     if self.enable_leak:
+    #         self.all_params["leak_rate"] = (0.1, (0.0, 1.0))
+    #     if self.enable_time_dependence:
+    #         self.all_params["time_constant"] = (1e-2, (0.0, 0.1))
+
+    #     param_names = list(self.all_params.keys())
+    #     initial_params = [self.all_params[n][0] for n in param_names]
+    #     bounds = [self.all_params[n][1] for n in param_names]
+
+    #     # --- Objective function ---
+    #     def objective_function(params, lambda_l1=0.01):
+    #         total_nllh = 0.0
+    #         for idx_prior, prior in enumerate(["equal", "unequal"]):
+    #             prior_mask = data["prior_block"] == prior
+    #             # Map params into simulator
+    #             for name, value in zip(param_names, params):
+    #                 if (name.endswith("_1") and idx_prior == 0) or (name.endswith("_2") and idx_prior == 1):
+    #                     base_name = name[:-2]
+    #                     setattr(self.simulator, base_name, value)
+    #                 else:
+    #                     setattr(self.simulator, name, value)
+
+    #             # Accumulate across replicates to reduce noise
+    #             # all_preds = []
+    #             # for rep in range(n_reps):
+    #             np.random.seed(seed)
+    #             rt_model, choice_model, _ = self.simulator.simulate_trials(stimulus[prior_mask])
+    #             # all_preds.append((rt_model, choice_model))
+
+    #             # Average predictions over replicates
+    #             # rt_model = np.mean([p[0] for p in all_preds], axis=0)
+    #             # choice_model = np.round(np.mean([p[1] for p in all_preds], axis=0))
+
+    #             prediction = {
+    #                 "signed_coherence": stimulus[prior_mask, 0],
+    #                 "choice": choice_model,
+    #                 "rt": rt_model,
+    #             }
+
+    #             # Calculate weighted NLLH
+    #             total_nllh += self.likelihood_calculator.calculate_total_llh_per_choice(prediction, data[prior_mask])
+
+    #         if not np.isfinite(total_nllh):
+    #             return 1e10
+
+    #         # L1 penalty if desired
+    #         total_nllh += lambda_l1 * np.sum(np.abs(params))
+    #         return total_nllh
+
+    #     # --- Stage 1: coarse Powell search ---
+    #     stage1 = minimize(objective_function, x0=initial_params, bounds=bounds, method="Powell", options={"maxiter": 100, "disp": True})
+
+    #     # --- Stage 2: refine with L-BFGS-B ---
+    #     stage2 = minimize(objective_function, x0=stage1.x, bounds=bounds, method="L-BFGS-B", options=optimizer_options)
+
+    #     return stage2
+
+    def fit(self, data, stimulus, optimization_method=None, optimizer_options=None, n_reps=10, seed=42, lambda_l1=0.01):
         """
-        Fit the model to empirical data using optimization.
+        Fit the model to empirical data using a robust multi-stage optimization.
 
         Args:
             data (DataFrame): columns 'signed_coherence', 'choice', 'rt', 'prior_block'.
             stimulus (ndarray): shape (n_trials, n_timepoints)
             optimizer_options (dict): options for optimizer.
             n_reps (int): number of replicate simulations per evaluation to reduce noise.
-            seed (int): base RNG seed for deterministic likelihoods.
-            rt_weight (float): weight for RT likelihood.
-            choice_weight (float): weight for choice likelihood.
+            seed (int): RNG seed for reproducibility.
+            lambda_l1 (float): L1 regularization weight.
+
+        Returns:
+            OptimizeResult: result of final optimization stage.
 
         """
         if optimizer_options is None:
@@ -385,70 +474,87 @@ class DecisionModel:
 
         # --- Parameter setup ---
         self.all_params = {
-            # common parameters
-            "ndt": (0.1, (0.05, 0.3)),
+            "ndt": (0.2, (0.1, 0.5)),  # Raised lower bound to avoid unrealistically low RT
             "drift_gain": (7.0, (1.0, 20.0)),
             "variance": (1.0, (0.1, 5.0)),
-            "a_1": (2.0, (0.5, 5.0)),
+            "a_1": (2.0, (0.8, 6.0)),  # Increased max bound for slower RTs
             "z_1": (0.5, (0.1, 0.9)),
             "drift_offset_1": (0.0, (-5.0, 5.0)),
-            "a_2": (2.0, (0.5, 5.0)),
+            "a_2": (2.0, (0.8, 6.0)),
             "z_2": (0.5, (0.1, 0.9)),
             "drift_offset_2": (0.0, (-5.0, 5.0)),
         }
         if self.enable_leak:
             self.all_params["leak_rate"] = (0.1, (0.0, 1.0))
         if self.enable_time_dependence:
-            self.all_params["time_constant"] = (1e-2, (0.0, 0.1))
+            self.all_params["time_constant"] = (0.01, (0.001, 0.1))
 
         param_names = list(self.all_params.keys())
         initial_params = [self.all_params[n][0] for n in param_names]
         bounds = [self.all_params[n][1] for n in param_names]
 
+        # Normalize parameters to [0,1] for optimizer stability
+        def normalize_params(params):
+            return [(p - b[0]) / (b[1] - b[0]) for p, b in zip(params, bounds)]
+
+        def denormalize_params(norm_params):
+            return [b[0] + p * (b[1] - b[0]) for p, b in zip(norm_params, bounds)]
+
         # --- Objective function ---
-        def objective_function(params, lambda_l1=0.01):
+        def objective_function(norm_params):
+            params = denormalize_params(norm_params)
             total_nllh = 0.0
             for idx_prior, prior in enumerate(["equal", "unequal"]):
                 prior_mask = data["prior_block"] == prior
-                # Map params into simulator
                 for name, value in zip(param_names, params):
                     if (name.endswith("_1") and idx_prior == 0) or (name.endswith("_2") and idx_prior == 1):
-                        base_name = name[:-2]
-                        setattr(self.simulator, base_name, value)
+                        setattr(self.simulator, name[:-2], value)
                     else:
                         setattr(self.simulator, name, value)
 
-                # Accumulate across replicates to reduce noise
-                # all_preds = []
-                # for rep in range(n_reps):
-                np.random.seed(seed)
-                rt_model, choice_model, _ = self.simulator.simulate_trials(stimulus[prior_mask])
-                # all_preds.append((rt_model, choice_model))
+                # Multi-replicate averaging to reduce noise
+                all_rt, all_choice = [], []
+                for rep in range(n_reps):
+                    np.random.seed(seed + rep)
+                    rt_model, choice_model, _ = self.simulator.simulate_trials(stimulus[prior_mask])
+                    all_rt.append(rt_model)
+                    all_choice.append(choice_model)
 
-                # Average predictions over replicates
-                # rt_model = np.mean([p[0] for p in all_preds], axis=0)
-                # choice_model = np.round(np.mean([p[1] for p in all_preds], axis=0))
+                rt_model = np.concatenate(all_rt)
+                choice_model = np.concatenate(all_choice)
 
                 prediction = {
-                    "signed_coherence": stimulus[prior_mask, 0],
+                    "signed_coherence": np.repeat(stimulus[prior_mask, 0], n_reps),
                     "choice": choice_model,
                     "rt": rt_model,
                 }
 
-                # Calculate weighted NLLH
-                total_nllh += self.likelihood_calculator.calculate_total_llh_per_choice(prediction, data[prior_mask])
+                nllh = self.likelihood_calculator.calculate_total_llh_per_choice(prediction, data[prior_mask])
+                total_nllh += nllh
+
+            # # Soft penalty for unrealistically low RTs
+            # if np.mean(rt_model) < 300:  # in ms
+            #     total_nllh += 1e5  # big penalty
+
+            # L1 regularization
+            total_nllh += lambda_l1 * np.sum(np.abs(params))
 
             if not np.isfinite(total_nllh):
                 return 1e10
-
-            # L1 penalty if desired
-            total_nllh += lambda_l1 * np.sum(np.abs(params))
             return total_nllh
 
-        # --- Stage 1: coarse Powell search ---
-        stage1 = minimize(objective_function, x0=initial_params, bounds=bounds, method="Powell", options={"maxiter": 100, "disp": True})
+        # --- Stage 0: Global search with Differential Evolution ---
+        print("Stage 0: Global search...")
+        stage0 = differential_evolution(lambda x: objective_function(x), bounds=[(0, 1)] * len(bounds), maxiter=30, polish=False)
 
-        # --- Stage 2: refine with L-BFGS-B ---
-        stage2 = minimize(objective_function, x0=stage1.x, bounds=bounds, method="L-BFGS-B", options=optimizer_options)
+        # --- Stage 1: Powell refinement ---
+        print("Stage 1: Powell refinement...")
+        stage1 = minimize(objective_function, x0=stage0.x, bounds=[(0, 1)] * len(bounds), method="Powell", options={"maxiter": 100, "disp": True})
 
+        # --- Stage 2: L-BFGS-B fine-tuning ---
+        print("Stage 2: L-BFGS-B fine-tuning...")
+        stage2 = minimize(objective_function, x0=stage1.x, bounds=[(0, 1)] * len(bounds), method="L-BFGS-B", options=optimizer_options)
+
+        # Return final result with denormalized params
+        stage2.x = denormalize_params(stage2.x)
         return stage2
