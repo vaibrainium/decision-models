@@ -259,8 +259,9 @@ class CUDADDMSimulator:
 
             # Apply urgency signal
             decision_var = evidence[active_idx]
-            if self.time_constant > 0:
-                urgency_factor = 1 + t * self.time_constant
+            if self.time_constant != 0: ######################################################## can be positive or negative
+                urgency_factor = 1 + t * self.time_constant################ changed here, approxiamtion to exponention
+                ##### t*self.time_constant?
                 decision_var = starting_point + (evidence[active_idx] - starting_point) * urgency_factor
 
             # Boundary detection
@@ -280,14 +281,15 @@ class CUDADDMSimulator:
 
         # Return numpy arrays
         return rt.cpu().numpy(), choice.cpu().numpy(), evidence.cpu().numpy()
-
+        ##### only latest evidence is returned
+    
 
 class StreamlinedLikelihoodCalculator:
     """
     Optimized likelihood calculator using simplified quantile-based approach.
     """
 
-    def __init__(self, nbins: int = 5, rt_weight: float = 1.0):
+    def __init__(self, nbins: int = 5, rt_weight: float = 1.0): #### instead of 9 bins
         self.nbins = nbins
         self.rt_weight = rt_weight
         self.eps = 1e-12
@@ -299,7 +301,7 @@ class StreamlinedLikelihoodCalculator:
     def _get_quantiles(self, rt_data: np.ndarray) -> np.ndarray:
         """Get quantiles with caching."""
         if len(rt_data) < self.nbins:
-            return np.array([rt_data.min(), rt_data.max()])
+            return np.array([rt_data.min(), rt_data.max()])###### different
 
         # Simple cache key (avoid expensive tuple conversion)
         cache_key = (len(rt_data), rt_data.min(), rt_data.max(), rt_data.mean())
@@ -307,7 +309,7 @@ class StreamlinedLikelihoodCalculator:
         if cache_key in self._cache:
             return self._cache[cache_key]
 
-        quantiles = np.linspace(0.1, 0.9, self.nbins)
+        quantiles = np.linspace(0.1, 0.9, self.nbins) # quantiles = np.linspace(0, 1, self.nbins + 1)
         values = np.quantile(rt_data, quantiles)
 
         # Update cache with size limit
@@ -315,7 +317,7 @@ class StreamlinedLikelihoodCalculator:
             self._cache.clear()
         self._cache[cache_key] = values
 
-        return values
+        return values # didn't include min and max
 
     def calculate_likelihood(self, rt_pred: np.ndarray, choice_pred: np.ndarray, rt_data: np.ndarray, choice_data: np.ndarray, coherences_pred: np.ndarray, coherences_data: np.ndarray) -> float:
         """
@@ -350,6 +352,7 @@ class StreamlinedLikelihoodCalculator:
 
         total_nllh = 0.0
         unique_cohs = np.unique(coherences_data)
+        unique_choices = np.unique(choice_data)
 
         for coh in unique_cohs:
             data_mask = coherences_data == coh
@@ -359,7 +362,7 @@ class StreamlinedLikelihoodCalculator:
                 continue
 
             # Choice likelihood
-            for choice_val in [0, 1]:
+            for choice_val in unique_choices: 
                 n_data = np.sum(choice_data[data_mask] == choice_val)
                 if n_data == 0:
                     continue
@@ -368,7 +371,7 @@ class StreamlinedLikelihoodCalculator:
                 total_nllh -= n_data * np.log(p_pred + self.eps)
 
             # RT likelihood using quantile matching
-            for choice_val in [0, 1]:
+            for choice_val in unique_choices:
                 rt_data_sub = rt_data[data_mask & (choice_data == choice_val)]
                 rt_pred_sub = rt_pred[pred_mask & (choice_pred == choice_val)]
 
@@ -380,7 +383,7 @@ class StreamlinedLikelihoodCalculator:
                 pred_quantiles = np.quantile(rt_pred_sub, np.linspace(0.1, 0.9, len(data_quantiles)))
 
                 # Penalize quantile deviations
-                quantile_error = np.mean((data_quantiles - pred_quantiles) ** 2)
+                quantile_error = np.mean((data_quantiles - pred_quantiles) ** 2) ### different
                 total_nllh += quantile_error * self.rt_weight * len(rt_data_sub)
 
         return total_nllh if np.isfinite(total_nllh) else 1e6
@@ -440,30 +443,29 @@ class OptimizedDecisionModel:
 
         return bounds
 
-    def _update_simulator_params(self, param_values: np.ndarray, prior_idx: Optional[int] = None):
-        """Update simulator parameters, handling prior-specific parameters."""
+    def _update_parameters(self, param_values: np.ndarray, prior_idx: Optional[int] = None):
+        """
+        Update simulator parameters with support for both single and dual-prior conditions.
+        
+        Args:
+            param_values: Array of parameter values
+            prior_idx: Optional prior index (0 for equal, 1 for unequal) for dual-prior conditions
+        """
         param_names = list(self._param_bounds.keys())
 
         for name, value in zip(param_names, param_values):
-            # Handle prior-specific parameters
+            # Handle prior-specific parameters when prior_idx is specified
             if prior_idx is not None and name.endswith(f"_{prior_idx + 1}"):
                 # Remove the _1 or _2 suffix to get the base parameter name
                 base_name = name[:-2]  # removes _1 or _2
                 setattr(self.simulator, base_name, value)
+            elif prior_idx is None and ("_1" in name or "_2" in name):
+                # For final parameter update after optimization, strip suffix
+                base_name = name.split("_")[0] if "_" in name else name
+                setattr(self.simulator, base_name, value)
             elif "_" not in name or not name[-1].isdigit():
                 # Global parameters (no suffix)
                 setattr(self.simulator, name, value)
-
-    def _update_parameters(self, best_params):
-        """
-        Update the simulator's attributes with best-fit parameters.
-        Compatibility method that matches original interface.
-        """
-        param_names = list(self._param_bounds.keys())
-        for name, val in zip(param_names, best_params):
-            # Strip suffix _1 or _2 for per-prior parameters if needed
-            base_name = name.split("_")[0] if "_" in name else name
-            setattr(self.simulator, base_name, val)
 
     def _objective_function(self, params: np.ndarray, data: dict, stimulus: np.ndarray, n_reps: int = 5, seed: int = 42, l1_weight: float = 0.01) -> float:
         """
@@ -500,14 +502,7 @@ class OptimizedDecisionModel:
                     continue
 
                 # Update parameters for this prior condition
-                for name, value in zip(param_names, params):
-                    if name.endswith(f"_{idx_prior + 1}"):
-                        # Prior-specific parameter
-                        base_name = name[:-2]
-                        setattr(self.simulator, base_name, value)
-                    elif "_" not in name or not name[-1].isdigit():
-                        # Global parameter
-                        setattr(self.simulator, name, value)
+                self._update_parameters(params, prior_idx=idx_prior)
 
                 # Simulate for this prior condition
                 all_rt, all_choice, all_coh = [], [], []
@@ -536,6 +531,7 @@ class OptimizedDecisionModel:
                 rt_pred = np.concatenate(all_rt)
                 choice_pred = np.concatenate(all_choice)
                 coh_pred = np.concatenate(all_coh)
+                ## did not average repetitions
 
                 # Prepare data for likelihood calculation
                 prior_data = {k: v[prior_mask] for k, v in data.items() if k != "prior_block"}
@@ -551,9 +547,8 @@ class OptimizedDecisionModel:
                 )
                 total_nllh += nllh
         else:
-            # Single condition - use original implementation
-            for name, value in zip(param_names, params):
-                setattr(self.simulator, name, value)
+            # Single condition - use unified parameter update
+            self._update_parameters(params)
 
             all_rt, all_choice, all_coh = [], [], []
 
@@ -634,8 +629,6 @@ class OptimizedDecisionModel:
 
             result = differential_evolution(objective, bounds=bounds, maxiter=max_iterations, popsize=10, seed=seed, polish=True, disp=verbose)
 
-        # Update simulator with best parameters
-        self._update_parameters(result.x)
 
         if verbose:
             logger.info(f"Optimization completed. Final cost: {result.fun:.2f}")
