@@ -111,7 +111,7 @@ def _simulate_ddm_trials_numba(stimulus: np.ndarray, drift_gain: float, drift_of
 
             # Apply urgency
             decision_var = evidence
-            if time_constant > 0:
+            if time_constant != 0:
                 urgency_factor = 1 + t * time_constant
                 decision_var = starting_point + (evidence - starting_point) * urgency_factor
 
@@ -259,8 +259,8 @@ class CUDADDMSimulator:
 
             # Apply urgency signal
             decision_var = evidence[active_idx]
-            if self.time_constant != 0: ######################################################## can be positive or negative
-                urgency_factor = 1 + t * self.time_constant################ changed here, approxiamtion to exponention
+            if self.time_constant != 0:  # can be positive or negative
+                urgency_factor = 1 + t * self.time_constant
                 ##### t*self.time_constant?
                 decision_var = starting_point + (evidence[active_idx] - starting_point) * urgency_factor
 
@@ -282,14 +282,14 @@ class CUDADDMSimulator:
         # Return numpy arrays
         return rt.cpu().numpy(), choice.cpu().numpy(), evidence.cpu().numpy()
         ##### only latest evidence is returned
-    
+
 
 class StreamlinedLikelihoodCalculator:
     """
     Optimized likelihood calculator using simplified quantile-based approach.
     """
 
-    def __init__(self, nbins: int = 5, rt_weight: float = 1.0): #### instead of 9 bins
+    def __init__(self, nbins: int = 5, rt_weight: float = 1.0):
         self.nbins = nbins
         self.rt_weight = rt_weight
         self.eps = 1e-12
@@ -301,15 +301,14 @@ class StreamlinedLikelihoodCalculator:
     def _get_quantiles(self, rt_data: np.ndarray) -> np.ndarray:
         """Get quantiles with caching."""
         if len(rt_data) < self.nbins:
-            return np.array([rt_data.min(), rt_data.max()])###### different
-
+            return np.array([rt_data.min(), rt_data.max()])
         # Simple cache key (avoid expensive tuple conversion)
         cache_key = (len(rt_data), rt_data.min(), rt_data.max(), rt_data.mean())
 
         if cache_key in self._cache:
             return self._cache[cache_key]
 
-        quantiles = np.linspace(0.1, 0.9, self.nbins) # quantiles = np.linspace(0, 1, self.nbins + 1)
+        quantiles = np.linspace(0.1, 0.9, self.nbins)
         values = np.quantile(rt_data, quantiles)
 
         # Update cache with size limit
@@ -317,7 +316,7 @@ class StreamlinedLikelihoodCalculator:
             self._cache.clear()
         self._cache[cache_key] = values
 
-        return values # didn't include min and max
+        return values
 
     def calculate_likelihood(self, rt_pred: np.ndarray, choice_pred: np.ndarray, rt_data: np.ndarray, choice_data: np.ndarray, coherences_pred: np.ndarray, coherences_data: np.ndarray) -> float:
         """
@@ -362,7 +361,7 @@ class StreamlinedLikelihoodCalculator:
                 continue
 
             # Choice likelihood
-            for choice_val in unique_choices: 
+            for choice_val in unique_choices:
                 n_data = np.sum(choice_data[data_mask] == choice_val)
                 if n_data == 0:
                     continue
@@ -383,7 +382,7 @@ class StreamlinedLikelihoodCalculator:
                 pred_quantiles = np.quantile(rt_pred_sub, np.linspace(0.1, 0.9, len(data_quantiles)))
 
                 # Penalize quantile deviations
-                quantile_error = np.mean((data_quantiles - pred_quantiles) ** 2) ### different
+                quantile_error = np.mean((data_quantiles - pred_quantiles) ** 2)  ### different
                 total_nllh += quantile_error * self.rt_weight * len(rt_data_sub)
 
         return total_nllh if np.isfinite(total_nllh) else 1e6
@@ -446,10 +445,11 @@ class OptimizedDecisionModel:
     def _update_parameters(self, param_values: np.ndarray, prior_idx: Optional[int] = None):
         """
         Update simulator parameters with support for both single and dual-prior conditions.
-        
+
         Args:
             param_values: Array of parameter values
             prior_idx: Optional prior index (0 for equal, 1 for unequal) for dual-prior conditions
+
         """
         param_names = list(self._param_bounds.keys())
 
@@ -628,7 +628,6 @@ class OptimizedDecisionModel:
             warnings.simplefilter("ignore")
 
             result = differential_evolution(objective, bounds=bounds, maxiter=max_iterations, popsize=10, seed=seed, polish=True, disp=verbose)
-
 
         if verbose:
             logger.info(f"Optimization completed. Final cost: {result.fun:.2f}")

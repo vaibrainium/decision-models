@@ -11,7 +11,7 @@ services:
       - ./:/src/
       - "${DATAPATH}:/mnt/data"
 
-    command: sleep infinity; nvidia-smi
+    command: sleep infinity; nvidia-smi; pip install -e .; pip install -r requirements.txt;
     deploy:
       resources:
         reservations:
