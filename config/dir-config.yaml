@@ -1,4 +1,0 @@
-data: {"raw":"/mnt/data/raw",
-      "compiled": "/mnt/data/compiled",
-      "processed": "/mnt/data/processed"
-}
