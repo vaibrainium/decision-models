@@ -7,6 +7,9 @@ import pandas as pd
 
 from config import dir_config
 from src.ddm_independent_parameter_models import *
+# import torch and verify cuda is available
+import torch
+
 
 # config
 compiled_dir = Path(dir_config.data.compiled)
@@ -26,6 +29,12 @@ if __name__ == "__main__":
     parser.add_argument("--session_id", type=int, required=True, help="ID of the session to fit")
     args = parser.parse_args()
     idx_session = args.session_id
+
+
+
+    # Verify CUDA availability
+    if not torch.cuda.is_available():
+        raise RuntimeError("CUDA is not available. Please check your GPU configuration.")
 
     # load behavior data
     behavior_df = pd.read_csv(Path(ddm_dir, "behavior_data.csv"))
