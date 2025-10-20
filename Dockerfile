@@ -7,7 +7,9 @@ COPY . /src/
 
 RUN apt-get update -y
 RUN apt-get upgrade -y
-
+RUN pip install --upgrade pip
+RUN pip install -r /src/requirements.txt
+RUN pip install -e /src/.
 # install fish shell
 RUN apt-add-repository ppa:fish-shell/release-3 -y
 RUN apt update && apt upgrade

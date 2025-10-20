@@ -4,3 +4,4 @@ data
 */.ipynb_checkpoints/*
 */__pycache__/*
 config/dir-config.yaml
+*.sif
