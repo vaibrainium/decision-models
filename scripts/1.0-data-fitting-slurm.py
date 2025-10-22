@@ -4,12 +4,10 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import torch
 
 from config import dir_config
 from src.ddm_independent_parameter_models import *
-# import torch and verify cuda is available
-import torch
-
 
 # config
 compiled_dir = Path(dir_config.data.compiled)
@@ -29,8 +27,6 @@ if __name__ == "__main__":
     parser.add_argument("--session_id", type=int, required=True, help="ID of the session to fit")
     args = parser.parse_args()
     idx_session = args.session_id
-
-
 
     # Verify CUDA availability
     if not torch.cuda.is_available():
