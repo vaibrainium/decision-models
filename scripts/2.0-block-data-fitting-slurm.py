@@ -4,7 +4,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import torch
 
 from config import dir_config
 from src.ddm_independent_parameter_models import *
@@ -30,8 +29,9 @@ if __name__ == "__main__":
     # load behavior data
     behavior_df = pd.read_csv(Path(ddm_dir, "behavior_data.csv"))
     session_ids = behavior_df["session_id"].unique()
-    prior_block, idx_session = args.session_id // len(session_ids), args.session_id % len(session_ids)
+    idx_prior, idx_session = args.session_id // len(session_ids), args.session_id % len(session_ids)
     session_id = session_ids[idx_session]
+    prior_block = behavior_df["prior_block"].unique()[idx_prior]
 
     # Verify CUDA availability
     if not torch.cuda.is_available():
