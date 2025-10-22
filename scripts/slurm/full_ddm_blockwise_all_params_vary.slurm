@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=ddm_fitting
-#SBATCH --array=0-44
+#SBATCH --array=0-88
 #SBATCH -p ckpt-all
 #SBATCH -A walkerlab
 #SBATCH --ntasks=1
