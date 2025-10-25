@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from config import dir_config
-from src.ddm_independent_parameter_models import *
+from src.ddm_blockwise_independent_parameter_models import *
 
 # config
 compiled_dir = Path(dir_config.data.compiled)
