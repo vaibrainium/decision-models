@@ -419,20 +419,12 @@ class OptimizedDecisionModel:
 
     def _setup_parameter_bounds(self) -> dict[str, tuple[float, tuple[float, float]]]:
         """Setup parameter bounds based on model configuration."""
-        bounds = {
-            "a": (2.0, (0.8, 6.0)),
-            "z": (0.5, (0.1, 0.9)),
-            "drift_offset": (0.0, (-5.0, 5.0)),
-            "ndt": (0.2, (0.1, 0.5)),
-            "drift_gain": (7.0, (1.0, 20.0)),
-            "variance": (1.0, (0.1, 5.0))
-        }
+        bounds = {"a": (2.0, (0.8, 6.0)), "z": (0.5, (0.1, 0.9)), "drift_offset": (0.0, (-5.0, 5.0)), "ndt": (0.2, (0.1, 0.5)), "drift_gain": (7.0, (1.0, 20.0)), "variance": (1.0, (0.1, 5.0))}
 
         if self.enable_leak:
             bounds["leak_rate"] = (0.1, (0.0, 1.0))
 
         if self.enable_time_dependence:
-            bounds["time_constant"] = (0.01, (0.001, 0.1))
             bounds["time_constant"] = (0.01, (0.001, 0.1))
 
         return bounds

@@ -56,7 +56,7 @@ if __name__ == "__main__":
         max_iterations=optimizer_options["maxiter"],
         n_reps=5,  # Reduce for faster fitting
         seed=42,
-        l1_weight=0.01,
+        l1_weight=0,  # 0.01,
         verbose=True,
     )
 

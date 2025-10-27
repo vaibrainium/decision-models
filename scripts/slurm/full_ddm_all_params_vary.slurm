@@ -1,14 +1,18 @@
 #!/bin/bash
 
 #SBATCH --job-name=ddm_fitting
-#SBATCH --array=0-44
+#SBATCH --array=0-45
 #SBATCH -p ckpt-all
 #SBATCH -A walkerlab
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --gpus=1
 #SBATCH --mem=16G
-#SBATCH --time=480
+#SBATCH --time=08:00:00
+
+# Optional but helpful for debugging/logging:
+#SBATCH -o /gscratch/walkerlab/vaibhav/logs/ddm_fit_%A_%a.out   # STDOUT log
+#SBATCH -e /gscratch/walkerlab/vaibhav/logs/ddm_fit_%A_%a.err   # STDERR log
 
 
 module load singularity
