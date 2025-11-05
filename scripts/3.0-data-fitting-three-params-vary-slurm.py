@@ -7,7 +7,7 @@ import pandas as pd
 import torch
 
 from config import dir_config
-from src.decision_models_optimized import *
+from src.models.ddm.full_ddm_vary_three import *
 
 # config
 compiled_dir = Path(dir_config.data.compiled)
@@ -36,6 +36,12 @@ if __name__ == "__main__":
     behavior_df = pd.read_csv(Path(ddm_dir, "behavior_data.csv"))
     session_ids = behavior_df["session_id"].unique()
     session_id = session_ids[idx_session]
+
+    successful_sessions = [f.name.replace(".pkl", "") for f in output_dir.iterdir() if f.is_file() and "_prior" not in f.name]
+
+    if str(session_id) in successful_sessions:
+        print(f"Session {session_id} already fitted. Exiting.")
+        exit(0)
 
     data = behavior_df[behavior_df["session_id"] == session_id]
     data = data[["signed_coherence", "choice", "rt", "prior_block"]].reset_index(drop=True)
